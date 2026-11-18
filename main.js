@@ -15,7 +15,7 @@ import { makeSections } from "./ui/schema.js";
 import { drawOverlay } from "./ui/overlay.js";
 import { attachInput } from "./ui/input.js";
 
-export const VERSION = "2.1.0";
+export const VERSION = "2.1.1";
 const TAU = Math.PI * 2;
 const $ = (id) => document.getElementById(id);
 
@@ -39,6 +39,16 @@ undoStack.push(app.S);
 function fail(msg) { const e = $("err"); e.style.display = "grid"; e.textContent = msg; }
 app.G = createGL(app.canvas);
 if (!app.G) { fail("WebGL is unavailable in this browser. Enable hardware acceleration and reload."); throw new Error("no webgl"); }
+/* If the GPU watchdog resets the driver anyway, the context is lost and
+   nothing can be drawn again. Save the state into the link, then reload in
+   safe mode (much smaller render bands) once the context comes back. */
+app.canvas.addEventListener("webglcontextlost", (e) => {
+  e.preventDefault();
+  try { window.history.replaceState(null, "", "#" + encodeState(app.S)); sessionStorage.setItem("inversion.safe", "1"); } catch (err) { /* ignore */ }
+  fail("The GPU stopped responding (a render pass ran too long) and the browser reset WebGL.\n\nReloading in safe mode with smaller render bands\u2026");
+  setTimeout(() => location.reload(), 2500);
+});
+app.canvas.addEventListener("webglcontextrestored", () => location.reload());
 const acc = new Accumulator(app.G);
 app.acc = acc;
 app.plane = new PlaneRenderer(app.G);
@@ -70,8 +80,32 @@ function sampleTarget() {
 }
 function requestLimit() { app.limit.update(app.S.limit, app.canvas.width / app.canvas.height, app.canvas.height); }
 
-function frame() {
+/* ---- adaptive banding ----
+   rAF only fires once the GPU has caught up, so the interval between
+   frames that drew a band measures how long that band took. Bands are
+   resized toward ~30 ms; a heavy mode starts small so its very first draw
+   cannot hang the GPU (Windows resets a driver after ~2 s, which loses the
+   WebGL context). */
+const tile = { row: 0, j: [0, 0], rows: {}, drew: 0, lastKey: "" };
+const SAFE = (() => { try { return sessionStorage.getItem("inversion.safe") === "1"; } catch (e) { return false; } })();
+function startRows(S, quick, h) {
+  if (quick || S.engine !== "space") return SAFE ? Math.max(16, h / 4) : h;
+  const frac = S.space.rmode === "path" ? 1 / 16 : 1 / 4;
+  return Math.max(8, Math.round(h * frac * (SAFE ? 0.25 : 1)));
+}
+function adaptRows(now) {
+  if (!tile.drew || !(tile.lastKey in tile.rows)) return;
+  const dt = now - tile.drew;
+  const r = tile.rows[tile.lastKey];
+  if (dt > 120) tile.rows[tile.lastKey] = r * 0.5;
+  else if (dt > 50) tile.rows[tile.lastKey] = r * 0.75;
+  else if (dt < 24) tile.rows[tile.lastKey] = r * 1.35;
+  tile.drew = 0;
+}
+
+function frame(now) {
   raf = 0;
+  adaptRows(now || performance.now());
   const S = app.S, gl = app.G.gl;
   const cw = app.canvas.width, ch = app.canvas.height;
 
@@ -89,16 +123,28 @@ function frame() {
     acc.ensure(cw, ch);
     const target = sampleTarget();
     if (app.anim.playing && !dirty && acc.n >= target) { app.anim.step(app.anim.recording ? 1 / 30 : undefined); dirty = true; }
-    if (dirty) { acc.reset(interacting || (app.anim.playing && !app.anim.recording) ? interactScale() : 1); dirty = false; }
+    if (dirty) { acc.reset(interacting || (app.anim.playing && !app.anim.recording) ? interactScale() : 1); dirty = false; tile.row = 0; }
     acc.tone = S.engine === "space" && app.linearHDR();
     if (acc.n < target) {
-      const vp = acc.begin();
       const quick = S.engine === "space" && (interacting > 0 || (app.anim.playing && !app.anim.recording));
-      const j = acc.scale < 1 && !quick ? [0, 0] : jitter(acc.n);
-      app.drawScene([vp.w, vp.h], j, app.lineScaleBase() * acc.scale, acc.n, quick);
-      acc.end();
+      const vp = acc.begin();
+      if (tile.row === 0) tile.j = acc.scale < 1 && !quick ? [0, 0] : jitter(acc.n);
+      /* band height from the adaptive per-mode budget; the cheap preview
+         and the plane views normally draw the whole frame at once */
+      const key = S.engine + (S.engine === "space" ? S.space.rmode : "") + (quick ? "q" : "") + vp.h;
+      if (!(key in tile.rows)) tile.rows[key] = startRows(S, quick, vp.h);
+      const rows = Math.max(4, Math.min(vp.h, Math.round(tile.rows[key])));
+      const band = Math.min(rows, vp.h - tile.row);
+      const gl2 = app.G.gl;
+      if (band < vp.h) { gl2.enable(gl2.SCISSOR_TEST); gl2.scissor(0, tile.row, vp.w, band); }
+      app.drawScene([vp.w, vp.h], tile.j, app.lineScaleBase() * acc.scale, acc.n, quick);
+      acc.endTile();
+      tile.row += band;
+      tile.lastKey = key;
+      tile.drew = performance.now();
+      if (tile.row >= vp.h) { tile.row = 0; acc.finishSample(); }
       acc.blit(null, cw, ch);
-      if (acc.n >= target && app.anim.playing) app.anim.frameDone();
+      if (acc.n >= target && tile.row === 0 && app.anim.playing) app.anim.frameDone();
     }
     if (acc.n < target || app.anim.playing) schedule();
   }
@@ -142,7 +188,9 @@ window.addEventListener("resize", app.resize);
 /* ---------------- readouts ---------------- */
 function renderHUD() {
   const S = app.S, hud = $("hud");
-  const samp = S.engine === "limit" ? "" : ` &nbsp; samples <b>${acc.n}/${sampleTarget()}</b>`;
+  const vh = Math.max(1, Math.round(app.canvas.height * acc.scale));
+  const part = tile.row > 0 ? ` (+${Math.round(tile.row / vh * 100)}%)` : "";
+  const samp = S.engine === "limit" ? "" : ` &nbsp; samples <b>${acc.n}/${sampleTarget()}</b>${part}`;
   if (S.engine === "space") {
     hud.innerHTML = `${{ apollo: "Apollonian packing", pk: "Pseudo-Kleinian", lat: "Lattice Apollonian", klein: "Kleinian 3D" }[S.space.formula]} &nbsp; iterations <b>${S.space[S.space.formula].maxIter}</b>${samp}`;
     return;

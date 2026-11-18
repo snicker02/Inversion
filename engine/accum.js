@@ -49,11 +49,20 @@ export class Accumulator {
     return { w, h };
   }
   end() {
-    const gl = this.G.gl;
-    gl.disable(gl.BLEND);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.endTile();
     this.n++;
   }
+  /* Tiled sampling: a sample may be drawn as several horizontal bands
+     (scissored), each its own short draw call, so no single call runs long
+     enough to trip the driver's GPU watchdog. The blend weight depends only
+     on n, which advances once the whole frame has been covered. */
+  endTile() {
+    const gl = this.G.gl;
+    gl.disable(gl.BLEND);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+  finishSample() { this.n++; }
   /* Draw the accumulated mean into fb (null = canvas). vw x vh is the
      viewport; the texture is addressed in units of the full target, so a
      partially filled export tile resolves 1:1. */

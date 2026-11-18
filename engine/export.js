@@ -15,7 +15,8 @@ export async function exportPNG(app, mult, onProgress) {
   W = Math.floor(W * k); H = Math.floor(H * k);
   const realMult = W / cw;
 
-  const T = Math.min(1024, G.maxTex, G.maxView[0], G.maxView[1]);
+  /* 3D tiles are small: a path-traced 1024^2 draw can exceed the GPU watchdog */
+  const T = Math.min(S.engine === "space" ? 256 : 1024, G.maxTex, G.maxView[0], G.maxView[1]);
   const out = document.createElement("canvas");
   out.width = W; out.height = H;
   const ctx = out.getContext("2d");

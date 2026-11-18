@@ -34,7 +34,7 @@ ${D.join("\n")}
 #define NS ${NS}
 #define MAXI 400
 #define MARCH 600
-#define MARCH2 160
+#define MARCH2 120
 
 uniform vec2  uFull, uOff;
 uniform int   uMaxIter, uMarch, uCMode, uShadowOn, uRMode, uBounces, uLinear, uBackdrop;
@@ -241,12 +241,19 @@ float trace(vec3 ro, vec3 rd, float eps0, float pixK, int maxSteps, out bool hit
 
 vec3 normalAt(vec3 p, float h){
   vec2 k = vec2(1.0, -1.0);
-  return normalize(k.xyy*DE(p + k.xyy*h) + k.yyx*DE(p + k.yyx*h) +
-                   k.yxy*DE(p + k.yxy*h) + k.xxx*DE(p + k.xxx*h));
+  vec3 g = k.xyy*DE(p + k.xyy*h) + k.yyx*DE(p + k.yyx*h) +
+           k.yxy*DE(p + k.yxy*h) + k.xxx*DE(p + k.xxx*h);
+  /* a flat or clamped estimate gives a zero gradient; normalize(0) is NaN,
+     and one NaN sample blackens a pixel for good under blending */
+  float l = length(g);
+  return l > 1e-30 ? g/l : vec3(0.0, 1.0, 0.0);
 }
+/* shadow-march budget: full for the primary hit, small for bounces */
+int gShadowIt;
 float softShadow(vec3 ro, vec3 rd, float tmin, float tmax, float k){
   float res = 1.0, t = tmin, ph = 1e10;
   for(int i = 0; i < 80; i++){
+    if(i >= gShadowIt) break;
     float h = DE(ro + rd*t);
     /* improved penumbra estimate (Aaltonen) */
     float y = h*h/(2.0*ph);
@@ -353,6 +360,7 @@ vec3 cosDir(vec3 n, vec2 fc){
 
 vec3 render(vec2 fc){
   gRnd = 0.0;
+  gShadowIt = 80;
   vec2 uv = (fc - 0.5*uFull)/uFull.y;
   vec3 dir = normalize(uFwd*uFov + uRight*uv.x + uUp*uv.y);
   vec3 ro = uEye;
@@ -388,6 +396,7 @@ vec3 render(vec2 fc){
     col += lamp(Po, n, dir, alb, eps, false, true);
     vec3 thr = alb, pp = Po, nn = n, rdd = dir;
     float e2 = eps;
+    gShadowIt = 28;
     for(int b = 0; b < 3; b++){
       if(b >= uBounces) break;
       vec3 d2 = cosDir(nn, fc);
@@ -437,7 +446,10 @@ vec3 aces(vec3 x){ return clamp((x*(2.51*x + 0.03))/(x*(2.43*x + 0.59) + 0.14), 
 
 void main(){
   vec2 fc = gl_FragCoord.xy + uOff;
-  vec3 c = max(render(fc), 0.0)*uExposure;
+  vec3 c = render(fc)*uExposure;
+  /* NaN / Inf guard: never let a bad sample into the running mean */
+  if(!(c.x == c.x && c.y == c.y && c.z == c.z) || !(abs(c.x) + abs(c.y) + abs(c.z) < 1e6)) c = vec3(0.0);
+  c = max(c, 0.0);
   if(uLinear == 1) gl_FragColor = vec4(min(c, vec3(64.0)), 1.0);
   else gl_FragColor = vec4(pow(aces(c), vec3(0.4545)), 1.0);
 }
