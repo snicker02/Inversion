@@ -15,7 +15,7 @@ import { makeSections } from "./ui/schema.js";
 import { drawOverlay } from "./ui/overlay.js";
 import { attachInput } from "./ui/input.js";
 
-export const VERSION = "2.1.1";
+export const VERSION = "2.1.2";
 const TAU = Math.PI * 2;
 const $ = (id) => document.getElementById(id);
 
@@ -75,7 +75,10 @@ function interactScale() {
 }
 function sampleTarget() {
   if (app.anim.recording) return app.S.engine === "limit" ? 1 : app.S.anim.recSamples;
-  if (interacting || app.anim.playing) return 1;
+  if (app.anim.playing) return 1;
+  /* while a drag is held still, keep refining the reduced-resolution
+     preview; any movement resets it */
+  if (interacting) return app.S.engine === "space" ? Math.min(app.S.render.samples, 32) : 1;
   return app.S.render.samples;
 }
 function requestLimit() { app.limit.update(app.S.limit, app.canvas.width / app.canvas.height, app.canvas.height); }
@@ -89,8 +92,10 @@ function requestLimit() { app.limit.update(app.S.limit, app.canvas.width / app.c
 const tile = { row: 0, j: [0, 0], rows: {}, drew: 0, lastKey: "" };
 const SAFE = (() => { try { return sessionStorage.getItem("inversion.safe") === "1"; } catch (e) { return false; } })();
 function startRows(S, quick, h) {
-  if (quick || S.engine !== "space") return SAFE ? Math.max(16, h / 4) : h;
-  const frac = S.space.rmode === "path" ? 1 / 16 : 1 / 4;
+  if (S.engine !== "space" || (quick && S.space.rmode !== "path")) return SAFE ? Math.max(16, h / 4) : h;
+  /* the path-traced drag preview is still the full path tracer: start it
+     banded too (at its reduced resolution a quarter of the rows) */
+  const frac = S.space.rmode === "path" ? (quick ? 1 / 4 : 1 / 16) : 1 / 4;
   return Math.max(8, Math.round(h * frac * (SAFE ? 0.25 : 1)));
 }
 function adaptRows(now) {
@@ -123,7 +128,10 @@ function frame(now) {
     acc.ensure(cw, ch);
     const target = sampleTarget();
     if (app.anim.playing && !dirty && acc.n >= target) { app.anim.step(app.anim.recording ? 1 / 30 : undefined); dirty = true; }
-    if (dirty) { acc.reset(interacting || (app.anim.playing && !app.anim.recording) ? interactScale() : 1); dirty = false; tile.row = 0; }
+    if (dirty) {
+      acc.reset(interacting || (app.anim.playing && !app.anim.recording) ? interactScale() : 1);
+      dirty = false; tile.row = 0;
+    }
     acc.tone = S.engine === "space" && app.linearHDR();
     if (acc.n < target) {
       const quick = S.engine === "space" && (interacting > 0 || (app.anim.playing && !app.anim.recording));

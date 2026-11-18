@@ -145,7 +145,12 @@ export class SpaceRenderer {
     gl.uniform1i(u("uMarch"), sp.march);
     gl.uniform1i(u("uCMode"), C.cmode);
     gl.uniform1i(u("uShadowOn"), sp.shadows ? 1 : 0);
-    gl.uniform1i(u("uRMode"), quick ? 0 : sp.rmode === "path" ? 2 : 1);
+    /* The drag preview of the path tracer is the path tracer itself, at the
+       reduced interactive resolution: measured against converged renders it
+       was about twice as close as any cheaper stand-in (estimate shading,
+       coarser detail). Studio previews without shadows. */
+    const pt = sp.rmode === "path";
+    gl.uniform1i(u("uRMode"), pt ? 2 : quick ? 0 : 1);
     gl.uniform1i(u("uBounces"), Math.max(1, Math.min(3, sp.bounces | 0)));
     gl.uniform1i(u("uLinear"), linear ? 1 : 0);
     gl.uniform1i(u("uBackdrop"), sp.backdrop === "dark" ? 1 : 0);

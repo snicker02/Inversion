@@ -87,7 +87,7 @@ for (const [eng, extra] of [["plane", {}], ["limit", {}], ["space", { space: { f
   const d = await dl;
   const path = `/tmp/shots/export-${eng}.png`;
   await d.saveAs(path);
-  ok(/inversion-v2\.1\.1-/.test(d.suggestedFilename()), `${eng} export name ${d.suggestedFilename()}`);
+  ok(/inversion-v2\.1\.2-/.test(d.suggestedFilename()), `${eng} export name ${d.suggestedFilename()}`);
 }
 /* 9. WebM recording (short) */
 await A(() => { const a = inversionApp; a.actions.loadPreset({ state: { engine: "plane", plane: { formula: "steiner" }, anim: { driver: "steinerRoll", speed: 1, hue: false, recSamples: 1 } } }); a.changed({}); });
