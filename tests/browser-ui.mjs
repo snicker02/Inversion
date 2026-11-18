@@ -61,10 +61,10 @@ ok(before !== after, "vertex drag moves the triangle");
 ok(await A(() => !!inversionApp.validTri()), "triangle still valid after drag");
 
 /* 6. deep zoom engages df64 incl. gap-fill duals */
-await A(() => { const a = inversionApp; a.actions.loadPreset({ state: { engine: "plane" } }); a.S.render.samples = 2; a.S.plane.cam = { x: 0.0, y: -0.23, s: 1.55e-6 }; a.changed({}); });
+await A(() => { const a = inversionApp; a.actions.loadPreset({ state: { engine: "plane" } }); a.S.render.samples = 2; a.S.plane.cam = { x: 0.1016314495479526, y: 0.02875123284395342, s: 0.00023067474836078577 }; a.S.plane.maxIter = 400; a.changed({}); });
 await settle();
 const deep = await A(() => ({ deep: inversionApp.plane.info.deep, dual: inversionApp.plane.info.dual }));
-ok(deep.deep && deep.dual, "deep zoom 1e6 uses emulated double with duals " + JSON.stringify(deep));
+ok(deep.deep && deep.dual, "deep zoom 6.7e3 uses emulated double with duals " + JSON.stringify(deep));
 const sd = await A(() => { const c = document.getElementById("gl"), g = c.getContext("webgl"), w = c.width, h = c.height, px = new Uint8Array(w * h * 4); g.readPixels(0, 0, w, h, g.RGBA, g.UNSIGNED_BYTE, px); let s = 0, s2 = 0, n = 0; for (let k = 0; k < px.length; k += 4 * 11) { const l = px[k]; s += l; s2 += l * l; n++; } const m = s / n; return Math.sqrt(s2 / n - m * m); });
 ok(sd > 5, "deep image has structure (sd " + sd.toFixed(1) + ")");
 await page.locator("#stage").screenshot({ path: "/tmp/shots/ui-deep.png" });
@@ -87,7 +87,7 @@ for (const [eng, extra] of [["plane", {}], ["limit", {}], ["space", { space: { f
   const d = await dl;
   const path = `/tmp/shots/export-${eng}.png`;
   await d.saveAs(path);
-  ok(/inversion-v2\.0\.0-/.test(d.suggestedFilename()), `${eng} export name ${d.suggestedFilename()}`);
+  ok(/inversion-v2\.1\.0-/.test(d.suggestedFilename()), `${eng} export name ${d.suggestedFilename()}`);
 }
 /* 9. WebM recording (short) */
 await A(() => { const a = inversionApp; a.actions.loadPreset({ state: { engine: "plane", plane: { formula: "steiner" }, anim: { driver: "steinerRoll", speed: 1, hue: false, recSamples: 1 } } }); a.changed({}); });

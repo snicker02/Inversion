@@ -1,6 +1,6 @@
 /* Pointer, wheel and keyboard handling for all three views. */
 import { s2w, hitPlane } from "./overlay.js";
-import { camBasis, project3, shell, camOf } from "../engine/render3d.js";
+import { camBasis, project3, apolloFrame, camOf } from "../engine/render3d.js";
 import { valid3D } from "../engine/math/sphere3d.js";
 
 export function attachInput(app) {
@@ -148,8 +148,7 @@ export function attachInput(app) {
 
   function dolly(f) {
     const S = app.S, c = camOf(S.space);
-    if (S.space.formula === "apollo" && !S.space.shellOff) c.dist = Math.max(0.03, Math.min(0.9 * shell(S.space).r, c.dist * f));
-    else if (S.space.formula === "apollo") c.dist = Math.max(0.03, Math.min(40, c.dist * f));
+    if (S.space.formula === "apollo") c.dist = Math.max(0.02, Math.min(apolloFrame(S.space).maxDist, c.dist * f));
     else c.dist = Math.max(1e-4, Math.min(200, c.dist * f));
     app.changed({});
   }

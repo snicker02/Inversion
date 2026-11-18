@@ -64,18 +64,19 @@ export const PRESETS = [
     engine: "limit", limit: { recipe: "maskit", mu: [0.05, 1.98], cam: { x: 0, y: 1, s: 1.2 } },
     color: { pal: 1, cmode: 2, cyc: 0.8, hue: 0.2 },
   } },
-  { group: "Space", name: "Sphere packing", state: {
-    engine: "space", space: { formula: "apollo", cut: { on: true, yaw: 1.15, pitch: 0.12, off: 0.0 } },
-    color: { pal: 0, cmode: 1, cyc: 1.4, hue: 0.02, fill: 0.9 },
+  { group: "Space", name: "Bubble ball", state: {
+    engine: "space", space: { formula: "apollo", hollow: 4, exposure: 0.8, cams: { apollo: { target: [0, 0, 0], yaw: 0.62, pitch: 0.38, dist: 7.2 } } },
+    color: { pal: 0, cmode: 1, cyc: 0.6, hue: 0.0, fill: 0.9 },
   } },
   { group: "Space", name: "Pseudo-Kleinian halls", state: {
-    engine: "space", space: { formula: "pk", amb: 0.45, head: 0.6, exposure: 1.35, shadowK: 8 },
-    color: { pal: 4, cmode: 4, cyc: 0.5, hue: 0.05, fill: 0.9 },
+    engine: "space", space: { formula: "pk", lamp: { on: true, at: "eye", power: 0.7 }, exposure: 1.3 },
+    color: { pal: 4, cmode: 1, cyc: 0.35, hue: 0.05, fill: 0.9 },
   } },
   { group: "Space", name: "Bubble lattice", state: {
-    engine: "space", space: { formula: "lat", amb: 0.5, head: 0.6, exposure: 1.6 }, color: { pal: 5, cmode: 4, cyc: 0.6, hue: 0.1, fill: 0.9 },
+    engine: "space", space: { formula: "lat" }, color: { pal: 8, cmode: 4, cyc: 0.6, hue: 0.1, fill: 0.9 },
   } },
-  { group: "Space", name: "Kleinian arches", state: {
-    engine: "space", space: { formula: "klein" }, color: { pal: 8, cmode: 6, cyc: 1, hue: 0.05, fill: 0.85 },
+  { group: "Space", name: "Kleinian domes", state: {
+    engine: "space", space: { formula: "klein", light: { yaw: 0.2, pitch: 1.2 }, lamp: { on: true, at: "target", power: 0.8 }, backdrop: "sky" },
+    color: { pal: 8, cmode: 1, cyc: 0.5, hue: 0.05, fill: 0.85 },
   } },
 ];

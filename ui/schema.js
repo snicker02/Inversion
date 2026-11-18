@@ -19,10 +19,10 @@ const FORMULA_HINT = {
   maskit: "Maskit slice: a(z) = &mu; + 1/z with b(z) = z + 2. Escape-time over the strip with the half-turn trick. At &mu; = 2i the limit set is an Apollonian gasket.",
 };
 const SPACE_HINT = {
-  apollo: "Four spheres on a tetrahedron plus their enclosing sphere, reflected in the dual spheres so the packing fills the gaps. <b>Drag a vertex</b> to deform; camera stays inside the shell.",
+  apollo: "Four spheres on a tetrahedron plus their enclosing sphere, reflected in the dual spheres so the packing fills the gaps. <b>Drag a vertex</b> to deform the configuration.",
   pk: "Pseudo-Kleinian (after knighty): fold into a box, invert in a sphere, repeat. Box size and offset change the architecture completely.",
   lat: "Lattice Apollonian (after Inigo Quilez): fold into a cubic cell and invert. Scale near 1.3 gives the classic bubble lattice.",
-  klein: "The Maskit group extended to upper half-space (Poincare extension). The walls of the strip and their images become bubbles and arches.",
+  klein: "The Maskit group extended to upper half-space (Poincaré extension), turned so the half-space is above a floor: the strip walls stand as a corridor and their images rise as domes.",
 };
 const LIMIT_HINT = {
   grandma: "Grandma's recipe (Indra's Pearls): traces t<sub>a</sub>, t<sub>b</sub> with parabolic commutator. (2, 2) is the Apollonian gasket; small imaginary parts give quasi-Fuchsian curves.",
@@ -163,8 +163,10 @@ export function makeSections(app) {
         { type: "hint", html: () => SPACE_HINT[sp().formula] || "" },
         { type: "buttons", show: sf("apollo"), buttons: [{ label: "Reset tetrahedron", wide: true, onClick: () => app.actions.resetTet() }] },
         { type: "html", cls: "stats", show: sf("apollo"), live: true, update: (n) => { n.innerHTML = app.tetStatsHTML(); } },
-        { type: "check", path: "space.shellOff", label: "Cut away the enclosing sphere", show: sf("apollo"),
-          onChange: () => app.actions.fit(), tip: "Off: fly inside the shell, as in v1" },
+        { type: "select", path: "space.hollow", label: "Hollow out", num: true, show: sf("apollo"), onChange: () => app.actions.fit(), options: [
+          ["0", "Seed sphere 1 (view from inside)"], ["1", "Seed sphere 2"], ["2", "Seed sphere 3"], ["3", "Seed sphere 4"],
+          ["4", "Enclosing sphere (view from outside)"], ["-1", "Nothing (solid)"]] },
+        { type: "hint", show: sf("apollo"), html: "The packing fills space, so there is nowhere to stand. Hollowing one sphere opens a chamber whose walls are its tangent neighbours; its images stay solid." },
         { type: "range", path: "space.srad", label: "Sphere radius", min: 0.6, max: 1.18, step: 0.005, fmt: f3, show: sf("apollo") },
 
         { type: "range", path: "space.pk.size", label: "Inversion size", min: 0.4, max: 1.6, step: 0.001, fmt: f3, show: sf("pk") },
@@ -182,6 +184,7 @@ export function makeSections(app) {
 
         { type: "range", path: "space.klein.mu.0", label: "&mu; real", min: -1, max: 1, step: 0.001, fmt: f3, show: sf("klein") },
         { type: "range", path: "space.klein.mu.1", label: "&mu; imaginary", min: 1.6, max: 2.2, step: 0.001, fmt: f3, show: sf("klein") },
+        { type: "check", path: "space.klein.floor", label: "Floor (the boundary plane)", show: sf("klein") },
         { type: "range", path: "space.klein.wrapz", label: "Depth wrap", min: 0, max: 3, step: 0.01, fmt: (v) => (v === 0 ? "off" : v.toFixed(2)), show: sf("klein"),
           tip: "Fold the third axis periodically (not a group element: knighty's artistic variant)" },
         { type: "range", path: "space.klein.thick", label: "Wall offset", min: -0.03, max: 0.03, step: 0.0005, fmt: (v) => v.toFixed(4), show: sf("klein") },
@@ -196,26 +199,38 @@ export function makeSections(app) {
     {
       id: "light", title: "Lighting & camera", show: isSpace, collapsible: true,
       items: [
-        { type: "range", path: "space.light.yaw", label: "Light direction", min: 0, max: 360, step: 1, ...deg },
-        { type: "range", path: "space.light.pitch", label: "Light height", min: -10, max: 89, step: 1, ...deg },
-        { type: "check", path: "space.shadows", label: "Soft shadows" },
-        { type: "range", path: "space.shadowK", label: "Shadow hardness", min: 2, max: 48, step: 0.5, fmt: f2, show: () => isSpace() && sp().shadows },
-        { type: "range", path: "space.ao", label: "Ambient occlusion", min: 0, max: 2, step: 0.01, fmt: f2 },
+        { type: "seg", path: "space.rmode", label: "Renderer", options: [["path", "Path traced"], ["studio", "Studio"]], refreshAll: true },
+        { type: "hint", html: () => (sp().rmode === "path"
+          ? "Monte Carlo lighting: soft shadows from the sun's disc and sky bounces converge as samples accumulate. While you drag, a fast preview is shown."
+          : "Deterministic lighting: penumbra-estimated soft shadows and distance-estimate occlusion. Converges in a few samples.") },
+        { type: "range", path: "space.bounces", label: "Bounces", min: 1, max: 3, step: 1, fmt: int, show: () => isSpace() && sp().rmode === "path" },
+        { type: "seg", path: "space.backdrop", label: "Backdrop", options: [["dark", "Dark"], ["sky", "Sky"]] },
+        { type: "range", path: "space.light.yaw", label: "Sun direction", min: 0, max: 360, step: 1, ...deg },
+        { type: "range", path: "space.light.pitch", label: "Sun height", min: -10, max: 89, step: 1, ...deg },
+        { type: "range", path: "space.sunI", label: "Sun intensity", min: 0, max: 8, step: 0.05, fmt: f2 },
+        { type: "range", path: "space.sunSize", label: "Sun size (softness)", min: 0.005, max: 0.4, step: 0.005, fmt: f3, show: () => isSpace() && sp().rmode === "path" },
+        { type: "check", path: "space.lamp.on", label: "Lamp (lights closed scenes)", refreshAll: true },
+        { type: "seg", path: "space.lamp.at", label: "Lamp position", show: () => isSpace() && sp().lamp.on, options: [["target", "Orbit centre"], ["eye", "Beside the eye"]] },
+        { type: "range", path: "space.lamp.power", label: "Lamp power", min: 0, max: 6, step: 0.01, fmt: f2, show: () => isSpace() && sp().lamp.on },
+        { type: "range", path: "space.skyI", label: "Sky intensity", min: 0, max: 3, step: 0.01, fmt: f2 },
+        { type: "range", path: "space.skyTint", label: "Sky tint from palette", min: 0, max: 1, step: 0.01, fmt: f2 },
+        { type: "check", path: "space.shadows", label: "Soft shadows (studio, lamp)" },
+        { type: "range", path: "space.shadowK", label: "Shadow hardness", min: 2, max: 48, step: 0.5, fmt: f2, show: () => isSpace() && sp().rmode === "studio" && sp().shadows },
+        { type: "range", path: "space.ao", label: "Ambient occlusion", min: 0, max: 2, step: 0.01, fmt: f2, show: () => isSpace() && sp().rmode === "studio" },
         { type: "range", path: "space.aoR", label: "Occlusion radius", min: 0.005, max: 0.3, step: 0.001, fmt: f3 },
-        { type: "range", path: "space.amb", label: "Ambient", min: 0, max: 1.5, step: 0.01, fmt: f2 },
+        { type: "range", path: "space.amb", label: "Sky ambient", min: 0, max: 2, step: 0.01, fmt: f2, show: () => isSpace() && sp().rmode === "studio" },
         { type: "range", path: "space.head", label: "Camera light", min: 0, max: 1.5, step: 0.01, fmt: f2, tip: "Unshadowed fill from the eye: lights closed scenes" },
         { type: "range", path: "space.spec", label: "Specular", min: 0, max: 1.5, step: 0.01, fmt: f2 },
         { type: "range", path: "space.shine", label: "Shininess", min: 4, max: 160, step: 1, fmt: int },
-        { type: "range", path: "space.rim", label: "Rim light", min: 0, max: 1.5, step: 0.01, fmt: f2 },
+        { type: "range", path: "space.rim", label: "Sky sheen", min: 0, max: 1.5, step: 0.01, fmt: f2 },
         { type: "range", path: "space.fog", label: "Fog", min: 0, max: 3, step: 0.01, fmt: f2 },
         { type: "range", path: "space.glow", label: "Glow", min: 0, max: 2, step: 0.01, fmt: f2 },
-        { type: "range", path: "space.exposure", label: "Exposure", min: 0.3, max: 3, step: 0.01, fmt: f2 },
+        { type: "range", path: "space.exposure", label: "Exposure", min: 0.2, max: 4, step: 0.01, fmt: f2 },
         { type: "range", path: "space.lens", label: "Aperture (DOF)", min: 0, max: 1, step: 0.005, fmt: f3, tip: "Depth of field resolves as samples accumulate" },
         { type: "range", path: "space.focus", label: "Focus distance", min: 0.02, max: 6, step: 0.005, fmt: f3, show: () => isSpace() && sp().lens > 0 },
         { type: "buttons", show: () => isSpace() && sp().lens > 0, buttons: [{ label: "Focus on orbit target", wide: true, onClick: () => app.actions.focusTarget() }] },
       ],
     },
-
     {
       id: "cut", title: "Section plane", show: isSpace, collapsible: true, closed: true,
       items: [

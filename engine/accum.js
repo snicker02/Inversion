@@ -1,8 +1,9 @@
 /* Progressive accumulation. Each sample is drawn straight into the
    accumulation target with constant-alpha blending at weight 1/(n+1), so
-   the target always holds the running mean. Sub-pixel jitter (and the lens
-   sample for depth of field) changes per sample, which turns the mean into
-   antialiasing and defocus for free. */
+   the target always holds the running mean. Sub-pixel jitter, the lens
+   sample and every Monte Carlo choice change per sample, which turns the
+   mean into antialiasing, defocus and converged lighting. The 3D view
+   accumulates linear HDR and is tone mapped only here, after averaging. */
 import { PRESENT_FS } from "./shaders/present.js";
 
 /* low-discrepancy jitter; sample 0 is the pixel centre */
@@ -22,6 +23,7 @@ export class Accumulator {
     this.t = null;
     this.n = 0;
     this.scale = 1;
+    this.tone = false;
     this.present = G.program("present", PRESENT_FS);
   }
   ensure(w, h) {
@@ -31,7 +33,7 @@ export class Accumulator {
     this.n = 0;
   }
   reset(scale = 1) { this.n = 0; this.scale = scale; }
-  /* bind for drawing sample n; returns viewport size */
+  /* bind for drawing sample n; returns the viewport size */
   begin() {
     const gl = this.G.gl, t = this.t;
     const w = Math.max(1, Math.round(t.w * this.scale)), h = Math.max(1, Math.round(t.h * this.scale));
@@ -52,20 +54,27 @@ export class Accumulator {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.n++;
   }
-  /* draw the accumulated mean to fb (null = canvas) at w x h */
-  blit(fb, w, h) {
+  /* Draw the accumulated mean into fb (null = canvas). vw x vh is the
+     viewport; the texture is addressed in units of the full target, so a
+     partially filled export tile resolves 1:1. */
+  blit(fb, vw, vh, opts = {}) {
     const gl = this.G.gl, P = this.present;
     if (!P.p) return;
     gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-    gl.viewport(0, 0, w, h);
+    gl.viewport(0, 0, vw, vh);
     gl.disable(gl.BLEND);
     this.G.useFullscreen(P);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.t.tex);
     gl.uniform1i(P.u("uTex"), 0);
-    gl.uniform2f(P.u("uRes"), w, h);
-    const sx = Math.round(this.t.w * this.scale) / this.t.w, sy = Math.round(this.t.h * this.scale) / this.t.h;
-    gl.uniform2f(P.u("uScale"), sx, sy);
+    const tile = !!opts.tile;
+    gl.uniform2f(P.u("uRes"), tile ? this.t.w : vw, tile ? this.t.h : vh);
+    if (tile) gl.uniform2f(P.u("uScale"), 1, 1);
+    else {
+      const sx = Math.round(this.t.w * this.scale) / this.t.w, sy = Math.round(this.t.h * this.scale) / this.t.h;
+      gl.uniform2f(P.u("uScale"), sx, sy);
+    }
+    gl.uniform1i(P.u("uTone"), this.tone ? 1 : 0);
     this.G.drawFullscreen();
   }
 }

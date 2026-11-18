@@ -8,10 +8,13 @@ export const PRESENT_FS = `precision highp float;
 uniform sampler2D uTex;
 uniform vec2 uRes;
 uniform vec2 uScale;
+uniform int uTone;        /* 1: linear HDR in, ACES + gamma out */
+vec3 aces(vec3 x){ return clamp((x*(2.51*x + 0.03))/(x*(2.43*x + 0.59) + 0.14), 0.0, 1.0); }
 void main(){
   vec2 uv = gl_FragCoord.xy/uRes*uScale;
   vec3 c = texture2D(uTex, uv).rgb;
-  /* half-LSB dither hides banding from the 8-bit fallback */
+  if(uTone == 1) c = pow(aces(max(c, 0.0)), vec3(0.4545));
+  /* half-LSB dither hides banding */
   float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233)))*43758.5453);
   gl_FragColor = vec4(c + (n - 0.5)/255.0, 1.0);
 }

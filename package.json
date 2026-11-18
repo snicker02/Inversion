@@ -1,1 +1,1 @@
-{ "name": "inversion", "version": "2.0.0", "private": true, "type": "module", "scripts": { "test": "node tests/math.test.mjs && node tests/shaders.test.mjs" } }
+{ "name": "inversion", "version": "2.1.0", "private": true, "type": "module", "scripts": { "test": "node tests/math.test.mjs && node tests/shaders.test.mjs" } }

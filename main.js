@@ -15,7 +15,7 @@ import { makeSections } from "./ui/schema.js";
 import { drawOverlay } from "./ui/overlay.js";
 import { attachInput } from "./ui/input.js";
 
-export const VERSION = "2.0.0";
+export const VERSION = "2.1.0";
 const TAU = Math.PI * 2;
 const $ = (id) => document.getElementById(id);
 
@@ -51,8 +51,11 @@ let raf = 0, dirty = true, limitDirty = true, interacting = 0, hashTimer = 0, la
 function schedule() { if (!raf) raf = requestAnimationFrame(frame); }
 
 app.lineScaleBase = () => app.DPR * app.S.render.quality;
-app.drawScene = (full, off, lineScale, n) => {
-  if (app.S.engine === "space") app.space.draw(app.S, full, off, n);
+/* 3D accumulates linear HDR (tone mapped after averaging) whenever the
+   accumulator is floating point */
+app.linearHDR = () => app.G.accumName !== "8-bit";
+app.drawScene = (full, off, lineScale, n, quick = false) => {
+  if (app.S.engine === "space") app.space.draw(app.S, full, off, n, quick, app.linearHDR());
   else app.plane.draw(app.S, null, full, off, lineScale);
 };
 
@@ -87,10 +90,12 @@ function frame() {
     const target = sampleTarget();
     if (app.anim.playing && !dirty && acc.n >= target) { app.anim.step(app.anim.recording ? 1 / 30 : undefined); dirty = true; }
     if (dirty) { acc.reset(interacting || (app.anim.playing && !app.anim.recording) ? interactScale() : 1); dirty = false; }
+    acc.tone = S.engine === "space" && app.linearHDR();
     if (acc.n < target) {
       const vp = acc.begin();
-      const j = acc.scale < 1 ? [0, 0] : jitter(acc.n);
-      app.drawScene([vp.w, vp.h], j, app.lineScaleBase() * acc.scale, acc.n);
+      const quick = S.engine === "space" && (interacting > 0 || (app.anim.playing && !app.anim.recording));
+      const j = acc.scale < 1 && !quick ? [0, 0] : jitter(acc.n);
+      app.drawScene([vp.w, vp.h], j, app.lineScaleBase() * acc.scale, acc.n, quick);
       acc.end();
       acc.blit(null, cw, ch);
       if (acc.n >= target && app.anim.playing) app.anim.frameDone();
@@ -379,7 +384,11 @@ const actions = {
     } else {
       const f = S.space.formula;
       S.space.cams[f] = clone(DEFAULTS.space.cams[f]);
-      if (f === "apollo" && !S.space.shellOff) S.space.cams[f].dist = 1.35;
+      if (f === "apollo") {
+        const h = S.space.hollow | 0;
+        S.space.cams[f].dist = h === 4 ? 7.2 : h === -1 ? 1.35 : 0.55;
+        if (h === 4) { S.space.cams[f].yaw = 0.62; S.space.cams[f].pitch = 0.38; }
+      }
     }
     app.changed({ commit: true });
   },

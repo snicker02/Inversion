@@ -1,6 +1,7 @@
 /* High-resolution PNG export, rendered in tiles so the image can exceed
    the GPU's texture limit and no single draw runs long enough to trip a
-   driver timeout. Each tile accumulates its own jittered samples. */
+   driver timeout. Each tile accumulates its own jittered samples, with the
+   full lighting (never the interactive preview). */
 import { Accumulator, jitter } from "./accum.js";
 
 const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
@@ -21,45 +22,33 @@ export async function exportPNG(app, mult, onProgress) {
   const rgba = G.target(T, T, gl.UNSIGNED_BYTE, false);
   const px = new Uint8Array(T * T * 4);
   const lineScale = realMult * app.lineScaleBase();
-  const samples = S.engine === "limit" ? 1 : Math.max(4, S.render.samples);
-  const acc = S.engine === "limit" ? null : new Accumulator(G);
+  const isLimit = S.engine === "limit";
+  const samples = isLimit ? 1 : Math.max(4, S.render.samples);
+  const acc = isLimit ? null : new Accumulator(G);
+  if (acc) acc.tone = S.engine === "space" && app.linearHDR();
 
-  if (S.engine === "limit") await app.limit.prepareExport(S, W, H);
+  if (isLimit) await app.limit.prepareExport(S, W, H);
 
   const nx = Math.ceil(W / T), ny = Math.ceil(H / T);
   let done = 0;
   try {
     for (let ty = 0; ty < ny; ty++) for (let tx = 0; tx < nx; tx++) {
       const x0 = tx * T, y0 = ty * T, tw = Math.min(T, W - x0), th = Math.min(T, H - y0);
-      if (S.engine === "limit") {
+      if (isLimit) {
         const cx = (2 * (x0 + tw / 2)) / W - 1, cy = (2 * (y0 + th / 2)) / H - 1;
-        app.limit.draw(S, rgba.fb, tw, th, [W, H], [(-cx * W) / tw, (-cy * H) / th, W / tw, H / th], lineScale, true);
+        app.limit.draw(S, rgba.fb, tw, th, [W, H], [(-cx * W) / tw, (-cy * H) / th, W / tw, H / th], lineScale);
       } else {
         acc.ensure(T, T);
         acc.reset(1);
-        acc.t.w = T; acc.t.h = T;
         for (let n = 0; n < samples; n++) {
           const j = jitter(n);
-          const gl2 = G.gl;
-          gl2.bindFramebuffer(gl2.FRAMEBUFFER, acc.t.fb);
-          const vp = acc.begin();
-          gl2.viewport(0, 0, tw, th);
-          app.drawScene([W, H], [x0 + j[0], y0 + j[1]], lineScale, n);
+          acc.begin();
+          gl.viewport(0, 0, tw, th);
+          app.drawScene([W, H], [x0 + j[0], y0 + j[1]], lineScale, n, false);
           acc.end();
           if (n % 2 === 1) { onProgress && onProgress((done + n / samples) / (nx * ny)); await yieldFrame(); }
-          void vp;
         }
-        /* resolve the tile into an 8-bit target at 1:1 */
-        gl.bindFramebuffer(gl.FRAMEBUFFER, rgba.fb);
-        gl.viewport(0, 0, tw, th);
-        const P = acc.present;
-        G.useFullscreen(P);
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, acc.t.tex);
-        gl.uniform1i(P.u("uTex"), 0);
-        gl.uniform2f(P.u("uRes"), T, T);
-        gl.uniform2f(P.u("uScale"), 1, 1);
-        G.drawFullscreen();
+        acc.blit(rgba.fb, tw, th, { tile: true });
       }
       gl.bindFramebuffer(gl.FRAMEBUFFER, rgba.fb);
       gl.readPixels(0, 0, tw, th, gl.RGBA, gl.UNSIGNED_BYTE, px);
