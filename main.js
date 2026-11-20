@@ -11,11 +11,12 @@ import * as M from "./engine/planeModel.js";
 import { apollonian, ringCircles } from "./engine/math/inversive2d.js";
 import { TETRA, tangencyGap } from "./engine/math/sphere3d.js";
 import { Panel } from "./ui/panel.js";
+import { initPanelTabs } from "./ui/tabs.js";
 import { makeSections } from "./ui/schema.js";
 import { drawOverlay } from "./ui/overlay.js";
 import { attachInput } from "./ui/input.js";
 
-export const VERSION = "2.1.2";
+export const VERSION = "2.2.0";
 const TAU = Math.PI * 2;
 const $ = (id) => document.getElementById(id);
 
@@ -192,6 +193,8 @@ app.resize = () => {
   schedule();
 };
 window.addEventListener("resize", app.resize);
+// The phone layout changes the stage size without a window resize.
+if (window.ResizeObserver) new ResizeObserver(() => app.resize()).observe($("stage"));
 
 /* ---------------- readouts ---------------- */
 function renderHUD() {
@@ -534,6 +537,7 @@ app.panel = new Panel($("controls"), app);
 app.panel.build(makeSections(app));
 $("ver").textContent = "v" + VERSION;
 $("menu").addEventListener("click", () => $("panel").classList.toggle("open"));
+initPanelTabs($("panel"), $("controls"));
 attachInput(app);
 app._prevPlaneFormula = app.S.plane.formula;
 app.resize();

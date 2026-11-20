@@ -66,8 +66,16 @@ export function attachInput(app) {
       if (pinch && pointers.size >= 2) {
         const pts = [...pointers.values()];
         const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        const m = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
         if (d > 4 && pinch.d > 4) dolly(pinch.d / d);
-        pinch.d = d;
+        /* two-finger drag pans, like shift-drag (the Apollonian packing stays centred) */
+        if (pinch.m && S.space.formula !== "apollo") {
+          const B = camBasis(S.space), k = c.dist / (B.fov * app.VH);
+          const dx = -(m.x - pinch.m.x) * k, dy = (m.y - pinch.m.y) * k;
+          for (let a = 0; a < 3; a++) c.target[a] += B.rt[a] * dx + B.up[a] * dy;
+          app.changed({});
+        }
+        pinch.d = d; pinch.m = m;
         return;
       }
       if (!drag) return;

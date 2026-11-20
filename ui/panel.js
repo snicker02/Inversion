@@ -76,6 +76,12 @@ export class Panel {
       sp.classList.add("rst");
       sp.title = (it.tip ? it.tip + "\n" : "") + "Double-click to reset";
       sp.addEventListener("dblclick", () => this.reset(it));
+      let lastTap = 0; // touch: double-tap resets (phones don't reliably send dblclick)
+      sp.addEventListener("pointerup", (e) => {
+        if (e.pointerType !== "touch") return;
+        const now = performance.now();
+        if (now - lastTap < 350) { lastTap = 0; e.preventDefault(); this.reset(it); } else lastTap = now;
+      });
     }
     wrap.appendChild(lab);
     it._lab = sp;
