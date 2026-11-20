@@ -331,7 +331,9 @@ export function makeSections(app) {
           { label: "Fit view", onClick: () => app.actions.fit() },
           { label: "Hide handles", onClick: () => app.actions.toggleHandles() },
           { label: "Undo", onClick: () => app.actions.undo() }] },
-        { type: "hint", html: "Scroll to zoom, drag to pan (Space: drag to orbit, shift-drag to pan). <b>H</b> handles &middot; <b>R</b> randomise &middot; <b>F</b> fit &middot; <b>S</b> save &middot; <b>Space</b> play &middot; <b>Ctrl+Z / Ctrl+Shift+Z</b> undo / redo. Double-click any label to reset it." },
+        { type: "hint", html: (window.matchMedia && matchMedia("(pointer: coarse)").matches)
+          ? "Drag to pan, pinch to zoom, drag a handle to move it. In Space view one finger orbits and two fingers pan. Double-tap any label to reset it."
+          : "Scroll to zoom, drag to pan (Space: drag to orbit, shift-drag to pan). <b>H</b> handles &middot; <b>R</b> randomise &middot; <b>F</b> fit &middot; <b>S</b> save &middot; <b>Space</b> play &middot; <b>Ctrl+Z / Ctrl+Shift+Z</b> undo / redo. Double-click any label to reset it." },
       ],
     },
   ];
