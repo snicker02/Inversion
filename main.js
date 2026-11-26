@@ -16,7 +16,7 @@ import { makeSections } from "./ui/schema.js";
 import { drawOverlay } from "./ui/overlay.js";
 import { attachInput } from "./ui/input.js";
 
-export const VERSION = "2.2.0";
+export const VERSION = "2.3.0";
 const TAU = Math.PI * 2;
 const $ = (id) => document.getElementById(id);
 
@@ -478,6 +478,13 @@ const actions = {
       dirty = true; limitDirty = true; schedule();
     }
   },
+  // one view-sized render for the shared image shelf
+  async shelfBlob() {
+    if (actions._busy) throw new Error("busy exporting");
+    actions._busy = true;
+    try { const { blob } = await exportPNG(app, 1); return blob; }
+    finally { actions._busy = false; dirty = true; limitDirty = true; schedule(); }
+  },
   async copyLink(btn) {
     const url = location.href.split("#")[0] + "#" + encodeState(app.S);
     try { await navigator.clipboard.writeText(url); app.toast("Link copied"); }
@@ -538,6 +545,14 @@ app.panel.build(makeSections(app));
 $("ver").textContent = "v" + VERSION;
 $("menu").addEventListener("click", () => $("panel").classList.toggle("open"));
 initPanelTabs($("panel"), $("controls"));
+// shared image shelf (snicker02.github.io/shared/bridge.js); the button is in Render & export
+app.shelf = window.SnickerShelf ? window.SnickerShelf.mount({
+  app: "Inversion",
+  button: null,
+  getImage: () => actions.shelfBlob(),
+  getMeta: () => ({ name: app.fileStem() + ".png" }),
+}) : null;
+if (!app.shelf && $("bShelf")) $("bShelf").hidden = true;
 attachInput(app);
 app._prevPlaneFormula = app.S.plane.formula;
 app.resize();

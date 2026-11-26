@@ -294,7 +294,8 @@ export function makeSections(app) {
         { type: "range", path: "render.interactScale", label: "While dragging (3D)", min: 0.2, max: 1, step: 0.05, fmt: (v) => Math.round(v * 100) + "%", show: isSpace },
         { type: "select", label: "Export size", path: "render.exportScale", num: true, options: [["1", "1&times; view"], ["2", "2&times;"], ["3", "3&times;"], ["4", "4&times;"], ["6", "6&times;"], ["8", "8&times;"]] },
         { type: "buttons", buttons: [
-          { label: "Save PNG", id: "bSave", wide: true, onClick: (b) => app.actions.savePNG(b) }] },
+          { label: "Save PNG", id: "bSave", wide: true, onClick: (b) => app.actions.savePNG(b) },
+          { label: "⇄ Shelf", id: "bShelf", wide: true, onClick: () => (app.shelf ? app.shelf.toggle() : app.toast("The shelf needs snicker02.github.io (offline?)")) }] },
         { type: "html", cls: "stats", live: true, update: (n) => { n.innerHTML = app.renderStatsHTML(); } },
       ],
     },
